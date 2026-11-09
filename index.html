@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GameLane — игровой туннель со стабильным пингом для Valorant</title>
+<meta name="description" content="GameLane — лёгкий игровой туннель для Valorant. Стабильный пинг, два режима работы, живая поддержка. Подписка от 175 ₽/мес.">
+<link rel="icon" href="icon.png" type="image/png">
+<meta property="og:title" content="GameLane — игровой туннель со стабильным пингом">
+<meta property="og:description" content="Стабильный пинг в Valorant, два режима работы, живая поддержка. Подписка от 175 ₽/мес.">
+<meta property="og:image" content="icon.png">
+<meta property="og:type" content="website">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #1e1e2e;
+    --bg2:      #181825;
+    --surface:  #313244;
+    --surface2: #45475a;
+    --fg:       #cdd6f4;
+    --muted:    #a6adc8;
+    --accent:   #89b4fa;
+    --success:  #a6e3a1;
+    --warn:     #f9e2af;
+    --error:    #f38ba8;
+    --radius:   16px;
+  }
+
+  html { scroll-behavior: auto; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  img { display: block; max-width: 100%; }
+  ::selection { background: var(--accent); color: var(--bg); }
+
+  /* ---------- Фон ---------- */
+  .bg-grid {
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(137,180,250,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(137,180,250,0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+    mask-image: radial-gradient(ellipse at 50% 0%, #000 30%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse at 50% 0%, #000 30%, transparent 75%);
+    pointer-events: none; z-index: 0;
+  }
+  .glow {
+    position: fixed; top: -300px; left: 50%;
+    transform: translateX(-50%);
+    width: 900px; height: 900px;
+    background: radial-gradient(circle, rgba(137,180,250,0.18) 0%, transparent 65%);
+    pointer-events: none; z-index: 0;
+    animation: pulseGlow 6s ease-in-out infinite;
+  }
+  @keyframes pulseGlow {
+    0%, 100% { opacity: .8; transform: translateX(-50%) scale(1); }
+    50%      { opacity: 1;  transform: translateX(-50%) scale(1.08); }
+  }
+
+  /* ---------- Хедер ---------- */
+  header {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    background: rgba(30,30,46,0.75);
+    border-bottom: 1px solid transparent;
+    transition: border-color .3s, background .3s;
+  }
+  header.scrolled {
+    border-bottom-color: var(--surface2);
+    background: rgba(24,24,37,0.9);
+  }
+  .header-inner {
+    max-width: 1150px; margin: 0 auto;
+    padding: 16px 32px;
+    display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 22px; font-weight: 700; color: var(--accent);
+    letter-spacing: -0.5px;
+  }
+  .brand img {
+    width: 36px; height: 36px; border-radius: 10px;
+    box-shadow: 0 0 20px rgba(137,180,250,0.4);
+    transition: transform .4s;
+  }
+  .brand:hover img { transform: rotate(-8deg) scale(1.08); }
+
+  nav.main-nav { display: flex; align-items: center; gap: 28px; }
+  nav.main-nav a {
+    font-size: 14px; color: var(--muted);
+    position: relative; transition: color .2s;
+  }
+  nav.main-nav a::after {
+    content: ""; position: absolute;
+    left: 0; bottom: -4px; width: 0; height: 2px;
+    background: var(--accent); transition: width .25s;
+  }
+  nav.main-nav a:hover { color: var(--accent); text-decoration: none; }
+  nav.main-nav a:hover::after { width: 100%; }
+
+  .header-cta {
+    background: var(--accent); color: var(--bg) !important;
+    padding: 9px 18px; border-radius: 10px;
+    font-weight: 600; font-size: 13px;
+    transition: transform .15s, box-shadow .15s;
+  }
+  .header-cta:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(137,180,250,0.4);
+    text-decoration: none;
+  }
+  .burger {
+    display: none; width: 36px; height: 36px;
+    background: var(--surface); border: none; border-radius: 8px;
+    color: var(--fg); font-size: 20px; cursor: pointer;
+  }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    position: relative; z-index: 1;
+    max-width: 1150px; margin: 0 auto;
+    padding: 80px 32px 100px;
+    display: grid; grid-template-columns: 1.15fr .85fr;
+    align-items: center; gap: 60px;
+  }
+  .hero-text h1 {
+    font-size: clamp(34px, 5.5vw, 60px);
+    font-weight: 800; letter-spacing: -1.5px;
+    line-height: 1.05; margin-bottom: 20px;
+    background: linear-gradient(135deg, #fff 0%, var(--accent) 55%, var(--success) 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-size: 200% 200%;
+    animation: gradientShift 8s ease infinite;
+  }
+  @keyframes gradientShift {
+    0%, 100% { background-position: 0% 50%; }
+    50%      { background-position: 100% 50%; }
+  }
+  .hero-text .sub {
+    font-size: clamp(16px, 2vw, 19px);
+    color: var(--muted); margin-bottom: 32px; max-width: 520px;
+  }
+  .hero-actions { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 20px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 15px 28px; border-radius: 12px;
+    font-size: 15px; font-weight: 700; cursor: pointer; border: none;
+    transition: transform .15s, box-shadow .2s, background .2s;
+    white-space: nowrap;
+  }
+  .btn svg { width: 18px; height: 18px; }
+  .btn-primary {
+    background: var(--accent); color: var(--bg);
+    box-shadow: 0 6px 24px rgba(137,180,250,0.3);
+  }
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 32px rgba(137,180,250,0.45);
+    text-decoration: none;
+  }
+  .btn-ghost {
+    background: var(--surface); color: var(--fg);
+    border: 1px solid var(--surface2);
+  }
+  .btn-ghost:hover {
+    background: var(--surface2); transform: translateY(-2px);
+    text-decoration: none;
+  }
+  .hero-note { font-size: 12px; color: var(--muted); }
+
+  .hero-visual { position: relative; display: flex; justify-content: center; }
+  .logo-wrap {
+    position: relative; width: 280px; height: 280px;
+    display: flex; align-items: center; justify-content: center;
+    animation: float 5s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-14px); }
+  }
+  .logo-wrap img {
+    width: 200px; height: 200px; border-radius: 44px;
+    position: relative; z-index: 2;
+    box-shadow: 0 0 60px rgba(137,180,250,0.5),
+                0 0 120px rgba(137,180,250,0.25);
+  }
+  .logo-wrap::before, .logo-wrap::after {
+    content: ""; position: absolute; inset: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(137,180,250,0.4);
+    animation: ringPulse 3s ease-out infinite;
+  }
+  .logo-wrap::after { animation-delay: 1.5s; }
+  @keyframes ringPulse {
+    0%   { transform: scale(.6); opacity: .9; }
+    100% { transform: scale(1.35); opacity: 0; }
+  }
+
+  /* ---------- Статистика ---------- */
+  .stats {
+    position: relative; z-index: 1;
+    max-width: 1000px; margin: 0 auto 40px;
+    padding: 0 32px;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+  }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--surface2);
+    border-radius: var(--radius);
+    padding: 22px 18px; text-align: center;
+    transition: border-color .25s, transform .25s;
+  }
+  .stat:hover { border-color: var(--accent); transform: translateY(-4px); }
+  .stat .num {
+    font-size: 30px; font-weight: 800;
+    color: var(--accent); line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .num small { font-size: 18px; color: var(--muted); font-weight: 600; }
+  .stat .lbl {
+    font-size: 12px; color: var(--muted);
+    margin-top: 4px; text-transform: uppercase; letter-spacing: .5px;
+  }
+
+  /* ---------- Секции ---------- */
+  section.block {
+    position: relative; z-index: 1;
+    max-width: 1100px; margin: 0 auto;
+    padding: 80px 32px;
+  }
+  .section-head { text-align: center; margin-bottom: 56px; }
+  .section-head .eyebrow {
+    display: inline-block; font-size: 12px; font-weight: 700;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: var(--accent); padding: 6px 14px;
+    border: 1px solid rgba(137,180,250,0.35);
+    border-radius: 999px; margin-bottom: 16px;
+  }
+  .section-head h2 {
+    font-size: clamp(26px, 4vw, 40px);
+    font-weight: 800; letter-spacing: -1px; margin-bottom: 12px;
+  }
+  .section-head p {
+    color: var(--muted); max-width: 620px;
+    margin: 0 auto; font-size: 15px;
+  }
+
+  /* ---------- Фичи (ровно 8 = 4×2) ---------- */
+  .features {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+  }
+  .feature {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--surface2);
+    border-radius: var(--radius);
+    padding: 26px 22px; overflow: hidden;
+    transition: transform .25s, border-color .25s;
+  }
+  .feature::before {
+    content: ""; position: absolute;
+    top: 0; left: 0; width: 100%; height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--success));
+    transform: scaleX(0); transform-origin: left;
+    transition: transform .35s;
+  }
+  .feature:hover { transform: translateY(-6px); border-color: var(--accent); }
+  .feature:hover::before { transform: scaleX(1); }
+  .feature .ico {
+    width: 46px; height: 46px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    background: rgba(137,180,250,0.12);
+    border-radius: 12px; margin-bottom: 14px;
+    transition: transform .3s;
+  }
+  .feature:hover .ico { transform: scale(1.1) rotate(-5deg); }
+  .feature h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+  .feature p { font-size: 13px; color: var(--muted); }
+
+  /* ---------- Как работает ---------- */
+  .steps {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 20px; counter-reset: step; position: relative;
+  }
+  .steps::before {
+    content: ""; position: absolute;
+    top: 34px; left: 12.5%; right: 12.5%; height: 2px;
+    background: linear-gradient(90deg,
+      transparent, var(--surface2) 15%, var(--surface2) 85%, transparent);
+    z-index: 0;
+  }
+  .step {
+    position: relative; text-align: center;
+    padding: 0 12px; z-index: 1;
+  }
+  .step .circle {
+    width: 68px; height: 68px;
+    margin: 0 auto 18px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 2px solid var(--surface2);
+    font-size: 22px; font-weight: 800; color: var(--accent);
+    transition: border-color .3s, transform .3s, box-shadow .3s;
+  }
+  .step:hover .circle {
+    border-color: var(--accent);
+    transform: scale(1.08);
+    box-shadow: 0 0 30px rgba(137,180,250,0.4);
+  }
+  .step h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+  .step p { font-size: 13px; color: var(--muted); }
+
+  /* ---------- Режимы ---------- */
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .mode-card {
+    background: var(--surface);
+    border: 1px solid var(--surface2);
+    border-radius: var(--radius);
+    padding: 32px 28px;
+    transition: transform .25s, border-color .25s;
+  }
+  .mode-card:hover { transform: translateY(-4px); }
+  .mode-card.pmode:hover { border-color: var(--accent); }
+  .mode-card.dmode:hover { border-color: var(--success); }
+  .mode-card .tag {
+    display: inline-block; font-size: 11px; font-weight: 800;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    padding: 5px 12px; border-radius: 6px; margin-bottom: 14px;
+  }
+  .mode-card.pmode .tag { background: rgba(137,180,250,0.15); color: var(--accent); }
+  .mode-card.dmode .tag { background: rgba(166,227,161,0.15); color: var(--success); }
+  .mode-card h3 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+  .mode-card p { font-size: 14px; color: var(--muted); margin-bottom: 16px; }
+  .mode-card ul { list-style: none; font-size: 14px; }
+  .mode-card li { padding: 6px 0; color: var(--fg); }
+  .mode-card li::before { content: "→ "; color: var(--accent); font-weight: 700; }
+  .mode-card.dmode li::before { color: var(--success); }
+
+  /* ---------- Цена: 2 колонки × 2 карточки = 4, симметрично ---------- */
+  .price-wrap {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: stretch;
+  }
+
+  .price-card {
+    background: linear-gradient(150deg, var(--surface) 0%, #26263a 100%);
+    border: 1px solid var(--surface2);
+    border-radius: 22px; padding: 40px 32px;
+    position: relative; overflow: hidden;
+    transition: border-color .3s, transform .3s;
+    display: flex; flex-direction: column;
+  }
+  .price-card:hover { border-color: var(--success); transform: translateY(-4px); }
+  .price-card::after {
+    content: ""; position: absolute;
+    top: -50%; right: -20%;
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, rgba(166,227,161,0.12), transparent 70%);
+    pointer-events: none;
+  }
+  .price-badge {
+    display: inline-block;
+    background: var(--success); color: var(--bg);
+    font-size: 11px; font-weight: 800; letter-spacing: 1px;
+    padding: 5px 12px; border-radius: 6px; margin-bottom: 16px;
+    text-transform: uppercase;
+    align-self: flex-start;
+  }
+  .price-card .amount {
+    font-size: 56px; font-weight: 800;
+    color: var(--success); line-height: 1;
+    letter-spacing: -2px;
+  }
+  .price-card .amount small {
+    font-size: 22px; font-weight: 600;
+    color: var(--muted); letter-spacing: 0;
+  }
+  .price-card .period {
+    font-size: 14px; color: var(--muted); margin: 8px 0 24px;
+  }
+  .price-card ul { list-style: none; margin-bottom: 28px; flex-grow: 1; }
+  .price-card li {
+    padding: 8px 0; font-size: 14px;
+    display: flex; align-items: flex-start; gap: 10px;
+  }
+  .price-card li::before {
+    content: "✓"; color: var(--success);
+    font-weight: 800; flex-shrink: 0;
+  }
+  .price-card .btn { width: 100%; justify-content: center; }
+  .price-note {
+    margin-top: 14px; font-size: 12px;
+    color: var(--muted); line-height: 1.5; text-align: center;
+  }
+  .price-note a { color: var(--accent); font-weight: 600; }
+
+  /* Вторая карточка — «приложение»: акцентный цвет */
+  .price-card.app-card:hover { border-color: var(--accent); }
+  .price-card.app-card::after {
+    background: radial-gradient(circle, rgba(137,180,250,0.14), transparent 70%);
+  }
+  .price-card.app-card .price-badge {
+    background: var(--accent); color: var(--bg);
+  }
+  .price-card.app-card .amount { color: var(--accent); }
+  .price-card.app-card li::before { color: var(--accent); }
+  .price-card.app-card .btn-primary {
+    background: var(--surface2);
+    color: var(--fg);
+    box-shadow: none;
+  }
+  .price-card.app-card .btn-primary:hover {
+    background: var(--surface);
+    box-shadow: 0 8px 28px rgba(137,180,250,0.25);
+  }
+
+  /* ---------- FAQ ---------- */
+  .faq { max-width: 780px; margin: 0 auto; }
+  details {
+    background: var(--surface);
+    border: 1px solid var(--surface2);
+    border-radius: 12px;
+    padding: 18px 22px; margin-bottom: 12px;
+    transition: border-color .25s;
+  }
+  details[open] { border-color: var(--accent); }
+  details:hover { border-color: var(--accent); }
+  summary {
+    font-size: 15px; font-weight: 600;
+    cursor: pointer; list-style: none;
+    display: flex; justify-content: space-between;
+    align-items: center; gap: 16px;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::after {
+    content: "+"; font-size: 22px; font-weight: 400;
+    color: var(--accent);
+    transition: transform .25s; flex-shrink: 0;
+  }
+  details[open] summary::after { transform: rotate(45deg); }
+  details p { margin-top: 12px; font-size: 14px; color: var(--muted); }
+
+  /* ---------- Финальный CTA ---------- */
+  .final-cta {
+    position: relative; z-index: 1;
+    max-width: 900px; margin: 20px auto 80px;
+    padding: 60px 40px; text-align: center;
+    background: linear-gradient(135deg, var(--surface) 0%, #26263a 100%);
+    border: 1px solid var(--surface2);
+    border-radius: 24px; overflow: hidden;
+  }
+  .final-cta::before {
+    content: ""; position: absolute;
+    top: -60%; left: 50%; transform: translateX(-50%);
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(137,180,250,0.18), transparent 60%);
+    pointer-events: none;
+  }
+  .final-cta h2 {
+    font-size: clamp(26px, 4vw, 38px);
+    font-weight: 800; letter-spacing: -1px;
+    margin-bottom: 14px; position: relative;
+  }
+  .final-cta p {
+    color: var(--muted); margin-bottom: 28px;
+    font-size: 16px; position: relative;
+  }
+  .final-cta .btn { position: relative; }
+
+  /* ---------- Футер ---------- */
+  footer {
+    position: relative; z-index: 1;
+    border-top: 1px solid var(--surface2);
+    padding: 48px 32px 32px;
+  }
+  .footer-inner {
+    max-width: 1100px; margin: 0 auto;
+    display: grid; grid-template-columns: 2fr 1fr 1fr;
+    gap: 40px;
+  }
+  .footer-brand p {
+    font-size: 13px; color: var(--muted);
+    margin-top: 12px; max-width: 320px;
+  }
+  .footer-col h5 {
+    font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1.5px;
+    color: var(--muted); margin-bottom: 14px;
+  }
+  .footer-col a {
+    display: block; font-size: 13px;
+    color: var(--fg); padding: 5px 0;
+    transition: color .2s;
+  }
+  .footer-col a:hover { color: var(--accent); text-decoration: none; }
+  .footer-bottom {
+    max-width: 1100px; margin: 36px auto 0;
+    padding-top: 24px; border-top: 1px solid var(--surface2);
+    display: flex; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px;
+    font-size: 12px; color: var(--muted);
+  }
+
+  /* ---------- Reveal ---------- */
+  .reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity .7s cubic-bezier(.22,1,.36,1),
+                transform .7s cubic-bezier(.22,1,.36,1);
+  }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+  .reveal.d1 { transition-delay: .08s; }
+  .reveal.d2 { transition-delay: .16s; }
+  .reveal.d3 { transition-delay: .24s; }
+  .reveal.d4 { transition-delay: .32s; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation: none !important;
+      transition: none !important;
+    }
+    .reveal { opacity: 1; transform: none; }
+  }
+
+  /* ---------- Адаптив ---------- */
+  @media (max-width: 1024px) {
+    .features { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 960px) {
+    .hero { grid-template-columns: 1fr; text-align: center; gap: 40px; padding: 50px 24px 70px; }
+    .hero-text .sub { margin-left: auto; margin-right: auto; }
+    .hero-actions { justify-content: center; }
+    .hero-visual { order: -1; }
+    .logo-wrap { width: 220px; height: 220px; }
+    .logo-wrap img { width: 160px; height: 160px; border-radius: 36px; }
+
+    .stats { grid-template-columns: repeat(3, 1fr); }
+    .steps { grid-template-columns: repeat(2, 1fr); gap: 32px; }
+    .steps::before { display: none; }
+    .modes { grid-template-columns: 1fr; }
+    .price-wrap { grid-template-columns: 1fr; }
+    .footer-inner { grid-template-columns: 1fr; gap: 28px; }
+  }
+  @media (max-width: 720px) {
+    nav.main-nav { display: none; }
+    nav.main-nav.open {
+      display: flex; position: absolute;
+      top: 100%; left: 0; right: 0;
+      flex-direction: column; align-items: stretch;
+      gap: 0; background: var(--bg2);
+      border-bottom: 1px solid var(--surface2);
+      padding: 12px 24px;
+    }
+    nav.main-nav.open a {
+      padding: 12px 0;
+      border-bottom: 1px solid var(--surface2);
+    }
+    nav.main-nav.open a:last-child { border-bottom: none; }
+    nav.main-nav.open a::after { display: none; }
+    .header-cta { display: none; }
+    .burger { display: block; }
+
+    section.block { padding: 56px 20px; }
+    .header-inner { padding: 14px 20px; }
+    .stats { padding: 0 20px; grid-template-columns: 1fr; }
+    .final-cta { margin: 0 20px 60px; padding: 44px 24px; }
+    .footer-bottom { flex-direction: column; text-align: center; }
+  }
+  @media (max-width: 560px) {
+    .features { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 420px) {
+    .steps { grid-template-columns: 1fr; }
+    .hero-actions .btn { width: 100%; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<!--
+  ============================================================
+   ССЫЛКА НА СКАЧИВАНИЕ — МЕНЯЙ ТОЛЬКО ЗДЕСЬ
+   ============================================================
+   Задаётся в самом низу, в <script>, константа DOWNLOAD_URL.
+   Один раз поменял — обновились обе кнопки скачивания на сайте.
+   ============================================================
+-->
+
+<div class="bg-grid"></div>
+<div class="glow"></div>
+
+<header id="header">
+  <div class="header-inner">
+    <a href="#top" class="brand" data-scroll>
+      <img src="icon.png" alt="GameLane">
+      <span>GameLane</span>
+    </a>
+    <nav class="main-nav" id="nav">
+      <a href="#features" data-scroll>Возможности</a>
+      <a href="#how" data-scroll>Как работает</a>
+      <a href="#modes" data-scroll>Режимы</a>
+      <a href="#price" data-scroll>Цена</a>
+      <a href="#faq" data-scroll>FAQ</a>
+    </nav>
+    <a href="#price" class="header-cta" data-scroll>Подключиться</a>
+    <button class="burger" id="burger" aria-label="Меню">☰</button>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-text reveal">
+      <h1>Меньше пинга —<br>больше побед</h1>
+      <p class="sub">
+        GameLane — лёгкий игровой туннель для Valorant. Стабильное соединение
+        и никакого лага в ответственный момент.
+      </p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="#" id="downloadBtn" data-download>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Скачать для Windows
+        </a>
+        <a class="btn btn-ghost" href="#how" data-scroll>Как это работает</a>
+      </div>
+      <p class="hero-note">Windows 10/11 · ~15 МБ · оплата в приложении или в Telegram</p>
+    </div>
+
+    <div class="hero-visual reveal d2">
+      <div class="logo-wrap" id="logoWrap">
+        <img src="icon.png" alt="GameLane логотип">
+      </div>
+    </div>
+  </section>
+
+  <!-- СТАТИСТИКА -->
+  <div class="stats reveal">
+    <div class="stat">
+      <div class="num">Стабильный</div>
+      <div class="lbl">Пинг</div>
+    </div>
+    <div class="stat">
+      <div class="num" data-count="99" data-suffix="%">0</div>
+      <div class="lbl">Аптайм сервера</div>
+    </div>
+    <div class="stat">
+      <div class="num" data-count="24" data-suffix="/7">0</div>
+      <div class="lbl">Поддержка</div>
+    </div>
+  </div>
+
+  <!-- ВОЗМОЖНОСТИ: ровно 8 -->
+  <section class="block" id="features">
+    <div class="section-head reveal">
+      <span class="eyebrow">Возможности</span>
+      <h2>Почему именно GameLane</h2>
+      <p>Восемь причин, по которым игроки выбирают наш туннель.</p>
+    </div>
+    <div class="features">
+      <div class="feature reveal d1">
+        <div class="ico">⚡</div>
+        <h3>Стабильный пинг</h3>
+        <p>Собственный сервер с прямым маршрутом до игровых серверов Valorant. Без посредников и лишних хопов.</p>
+      </div>
+      <div class="feature reveal d2">
+        <div class="ico">🎯</div>
+        <h3>Два режима</h3>
+        <p>p-mode — только игра через прокси. d-mode — всё остальное. Переключается одной кнопкой.</p>
+      </div>
+      <div class="feature reveal d3">
+        <div class="ico">💬</div>
+        <h3>Живая поддержка</h3>
+        <p>Поможем с настройкой и ответим на вопросы в Telegram. Без ботов и тикетов на неделю.</p>
+      </div>
+      <div class="feature reveal d4">
+        <div class="ico">🪶</div>
+        <h3>Лёгкое приложение</h3>
+        <p>Один .exe-файл, без установки и фоновых служб. Не грузит систему и не мешает игре.</p>
+      </div>
+      <div class="feature reveal d1">
+        <div class="ico">🔒</div>
+        <h3>Приватность</h3>
+        <p>Мы не храним историю ваших подключений и не передаём данные третьим лицам.</p>
+      </div>
+      <div class="feature reveal d2">
+        <div class="ico">💸</div>
+        <h3>Честная цена</h3>
+        <p>175 ₽ в месяц в Telegram или 200 ₽ в приложении. Без скрытых платежей и годовых подписок.</p>
+      </div>
+      <div class="feature reveal d3">
+        <div class="ico">🌍</div>
+        <h3>Свой сервер</h3>
+        <p>Не арендуем у сторонних провайдеров — контролируем маршрут и качество соединения сами.</p>
+      </div>
+      <div class="feature reveal d4">
+        <div class="ico">🚀</div>
+        <h3>Мгновенный старт</h3>
+        <p>Скачал, ввёл ключ, нажал «Подключиться». Без регистраций, подтверждений и ожиданий.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- КАК РАБОТАЕТ -->
+  <section class="block" id="how">
+    <div class="section-head reveal">
+      <span class="eyebrow">Как работает</span>
+      <h2>Четыре шага до стабильной игры</h2>
+      <p>Никакой магии — просто скачайте, оплатите и подключитесь.</p>
+    </div>
+    <div class="steps">
+      <div class="step reveal d1">
+        <div class="circle">1</div>
+        <h3>Скачайте приложение</h3>
+        <p>Один .exe-файл. Без установки и зависимостей.</p>
+      </div>
+      <div class="step reveal d2">
+        <div class="circle">2</div>
+        <h3>Оформите подписку</h3>
+        <p>Оплата в приложении или в Telegram — на выбор.</p>
+      </div>
+      <div class="step reveal d3">
+        <div class="circle">3</div>
+        <h3>Войдите в аккаунт</h3>
+        <p>Введите логин и ключ доступа. Всё.</p>
+      </div>
+      <div class="step reveal d4">
+        <div class="circle">4</div>
+        <h3>Играйте</h3>
+        <p>Нажмите «Подключиться» и запускайте Valorant.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- РЕЖИМЫ -->
+  <section class="block" id="modes">
+    <div class="section-head reveal">
+      <span class="eyebrow">Режимы</span>
+      <h2>Два режима под ваши задачи</h2>
+      <p>Выберите, что пускать через туннель — игру или весь трафик. Переключается в один клик.</p>
+    </div>
+    <div class="modes">
+      <div class="mode-card pmode reveal d1">
+        <span class="tag">p-mode</span>
+        <h3>Игра через прокси</h3>
+        <p>Весь остальной трафик идёт напрямую, как обычно.</p>
+        <ul>
+          <li>Минимальное вмешательство в систему</li>
+          <li>Подходит для Valorant и других игр</li>
+          <li>Остальные приложения работают как обычно</li>
+          <li>Рекомендуется по умолчанию</li>
+        </ul>
+      </div>
+      <div class="mode-card dmode reveal d2">
+        <span class="tag">d-mode</span>
+        <h3>Всё через прокси</h3>
+        <p>Через туннель идёт весь трафик, а игра — напрямую.</p>
+        <ul>
+          <li>Полезно при нестабильном соединении</li>
+          <li>Игра не затрагивается туннелем</li>
+          <li>Больше контроля над сетевыми запросами</li>
+          <li>Для опытных пользователей</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ЦЕНА: 2 карточки × 2 колонки = симметрично -->
+  <section class="block" id="price">
+    <div class="section-head reveal">
+      <span class="eyebrow">Подписка</span>
+      <h2>Одна цена — всё включено</h2>
+      <p>Два способа оформления на выбор: Telegram со скидкой или прямо в приложении.</p>
+    </div>
+
+    <div class="price-wrap">
+      <!-- Telegram -->
+      <div class="price-card reveal d1">
+        <span class="price-badge">Telegram · −25 ₽</span>
+        <div class="amount">175 <small>₽</small></div>
+        <div class="period">в месяц · без автосписаний</div>
+        <ul>
+          <li>Неограниченный трафик</li>
+          <li>Оба режима (p-mode / d-mode)</li>
+          <li>Доступ к серверу со стабильным пингом</li>
+          <li>Поддержка в Telegram</li>
+          <li>Оплата напрямую через Telegram</li>
+          <li>Дешевле, чем в приложении</li>
+        </ul>
+        <a class="btn btn-primary" href="https://t.me/Tylyl1" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M21.94 4.6 18.7 19.9c-.24 1.08-.88 1.35-1.79.84l-4.94-3.64-2.38 2.29c-.26.26-.49.49-.99.49l.35-5.02 9.13-8.25c.4-.35-.09-.55-.62-.2L6.18 13.09 1.3 11.56c-1.06-.33-1.08-1.06.22-1.57L20.6 3.02c.88-.32 1.65.2 1.34 1.58z"/>
+          </svg>
+          Оформить в Telegram
+        </a>
+        <p class="price-note">
+          Вопросы: <a href="https://t.me/Tylyl1" target="_blank" rel="noopener">@Tylyl1</a>
+        </p>
+      </div>
+
+      <!-- Приложение -->
+      <div class="price-card app-card reveal d2">
+        <span class="price-badge">Приложение</span>
+        <div class="amount">200 <small>₽</small></div>
+        <div class="period">в месяц · без автосписаний</div>
+        <ul>
+          <li>Неограниченный трафик</li>
+          <li>Оба режима (p-mode / d-mode)</li>
+          <li>Доступ к серверу со стабильным пингом</li>
+          <li>Оплата картой через ЮKassa</li>
+          <li>Подписка оформляется за 2 минуты</li>
+          <li>Цена фиксируется навсегда</li>
+        </ul>
+        <a class="btn btn-primary" href="#" data-download>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Скачать и оформить в приложении
+        </a>
+        <p class="price-note">
+          Скачайте приложение и оплатите картой внутри — цена&nbsp;фиксируется.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="block" id="faq">
+    <div class="section-head reveal">
+      <span class="eyebrow">FAQ</span>
+      <h2>Частые вопросы</h2>
+      <p>Если чего-то не нашли — пишите в Telegram, ответим лично.</p>
+    </div>
+    <div class="faq reveal">
+      <details>
+        <summary>Как оплатить подписку?</summary>
+        <p>Двумя способами: прямо в приложении за 200 ₽ (картой через ЮKassa) или в Telegram за 175 ₽ — напишите <a href="https://t.me/Tylyl1" target="_blank" rel="noopener">@Tylyl1</a>, и мы поможем с оформлением.</p>
+      </details>
+      <details>
+        <summary>Будет ли повышение цены?</summary>
+        <p>Для тех, кто оформил подписку во время тестирования, цена навсегда фиксируется на уровне 200 ₽. Повышения для ранних пользователей не будет.</p>
+      </details>
+      <details>
+        <summary>Это безопасно? Вы видите мой трафик?</summary>
+        <p>Туннель шифрует соединение, но, как и любой прокси, технически проходит через сервер. Мы не логируем содержимое трафика и не храним историю подключений. Используйте туннель так же осознанно, как любой VPN.</p>
+      </details>
+      <details>
+        <summary>На каких играх работает?</summary>
+        <p>Сейчас основной фокус — Valorant. Туннель работает на уровне системы, поэтому потенциально подходит и для других игр, но стабильность на них мы пока не гарантируем.</p>
+      </details>
+      <details>
+        <summary>Что такое p-mode и d-mode?</summary>
+        <p><b>p-mode</b> — через прокси идёт только игра, остальной трафик напрямую. Подходит большинству игроков. <b>d-mode</b> — наоборот, весь трафик через прокси, а игра напрямую.</p>
+      </details>
+      <details>
+        <summary>Нужен ли антивирус или дополнительные настройки?</summary>
+        <p>Нет. Приложение не требует установки драйверов и не вмешивается в системные настройки. Некоторые антивирусы могут ругаться на новый .exe — это нормально, добавьте в исключения.</p>
+      </details>
+      <details>
+        <summary>Можно ли вернуть деньги?</summary>
+        <p>Если туннель не заработал по нашей вине — вернём оплату. Напишите в Telegram <a href="https://t.me/Tylyl1" target="_blank" rel="noopener">@Tylyl1</a>, разберёмся индивидуально.</p>
+      </details>
+      <details>
+        <summary>Будут ли другие игры?</summary>
+        <p>Да, в планах расширение на другие популярные онлайн-игры. Следите за обновлениями в Telegram.</p>
+      </details>
+    </div>
+  </section>
+
+  <!-- ФИНАЛЬНЫЙ CTA -->
+  <div class="final-cta reveal">
+    <h2>Готовы играть без лагов?</h2>
+    <p>Скачайте приложение и подключитесь за пару минут. Подписка — от 175 ₽ в месяц.</p>
+    <a class="btn btn-primary" href="#" id="downloadBtn2" data-download>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      Скачать GameLane
+    </a>
+  </div>
+
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <a href="#top" class="brand" data-scroll>
+        <img src="icon.png" alt="GameLane">
+        <span>GameLane</span>
+      </a>
+      <p>Лёгкий игровой туннель для Valorant. Стабильный пинг, честная цена, живая поддержка.</p>
+    </div>
+    <div class="footer-col">
+      <h5>Продукт</h5>
+      <a href="#features" data-scroll>Возможности</a>
+      <a href="#how" data-scroll>Как работает</a>
+      <a href="#modes" data-scroll>Режимы</a>
+      <a href="#price" data-scroll>Подписка</a>
+    </div>
+    <div class="footer-col">
+      <h5>Связь</h5>
+      <a href="https://t.me/Tylyl1" target="_blank" rel="noopener">Telegram @Tylyl1</a>
+      <a href="mailto:a70655776@gmail.com">Email</a>
+      <a href="#faq" data-scroll>FAQ</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© <span id="year"></span> GameLane. Все права защищены.</span>
+    <span>Проект в стадии тестирования · Версия 1.1</span>
+  </div>
+</footer>
+
+<script>
+  // ============================================================
+  //  1) ССЫЛКА НА СКАЧИВАНИЕ — МЕНЯЙ ТОЛЬКО ЗДЕСЬ
+  // ============================================================
+  const DOWNLOAD_URL = "https://github.com/Nextrich/gameLane/releases/download/test/GameLaneSetup_winx64_1.1.exe";
+  // ============================================================
+
+  // ---------- Отключить восстановление скролла при загрузке ----------
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  window.addEventListener('load', () => window.scrollTo(0, 0));
+  window.scrollTo(0, 0);
+
+  document.getElementById('year').textContent = new Date().getFullYear();
+
+  // ---------- Скачивание: <a href="#" data-download> ----------
+  document.querySelectorAll('a[data-download]').forEach(a => {
+    a.setAttribute('href', DOWNLOAD_URL);
+    // download атрибут работает ТОЛЬКО для same-origin URL.
+    // Для внешних ссылок (GitHub Releases и т.п.) он игнорируется —
+    // браузер сам решит качать или открывать. Это нормально: на GitHub
+    // .exe-файл всё равно сразу стартует загрузка.
+    // Для своей папки /downloads/GameLane.exe — download сработает.
+    a.setAttribute('download', '');
+    // target=_blank не ставим: хотим, чтобы при скачивании
+    // пользователь оставался на сайте (браузер сам не уйдёт со страницы,
+    // если сервер отдаёт Content-Disposition: attachment).
+  });
+
+  // ---------- Плавный скролл по клику ----------
+  document.querySelectorAll('a[data-scroll]').forEach(a => {
+    a.addEventListener('click', e => {
+      const id = a.getAttribute('href');
+      if (!id || !id.startsWith('#')) return;
+      const target = document.querySelector(id);
+      if (!target) return;
+      e.preventDefault();
+      const headerH = document.getElementById('header').offsetHeight;
+      const top = target.getBoundingClientRect().top + window.scrollY - headerH - 12;
+      window.scrollTo({ top, behavior: 'smooth' });
+      history.replaceState(null, '', id);
+    });
+  });
+
+  // ---------- Sticky header ----------
+  const header = document.getElementById('header');
+  window.addEventListener('scroll', () => {
+    header.classList.toggle('scrolled', window.scrollY > 20);
+  }, { passive: true });
+
+  // ---------- Бургер ----------
+  const burger = document.getElementById('burger');
+  const nav = document.getElementById('nav');
+  burger.addEventListener('click', () => nav.classList.toggle('open'));
+  nav.querySelectorAll('a').forEach(a =>
+    a.addEventListener('click', () => nav.classList.remove('open'))
+  );
+
+  // ---------- Reveal ----------
+  const revealEls = document.querySelectorAll('.reveal');
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+  revealEls.forEach(el => io.observe(el));
+
+  // ---------- Счётчики ----------
+  function animateCounter(el) {
+    const target = parseInt(el.dataset.count, 10);
+    const suffix = el.dataset.suffix || '';
+    const duration = 1400;
+    const start = performance.now();
+    function tick(now) {
+      const p = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(target * eased) + suffix;
+      if (p < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+  const counters = document.querySelectorAll('.num[data-count]');
+  const counterIO = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        animateCounter(entry.target);
+        counterIO.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.6 });
+  counters.forEach(c => counterIO.observe(c));
+
+  // ---------- Параллакс иконки ----------
+  const logoWrap = document.getElementById('logoWrap');
+  const hero = document.querySelector('.hero');
+  if (window.matchMedia('(hover: hover)').matches) {
+    hero.addEventListener('mousemove', e => {
+      const rect = hero.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width - 0.5;
+      const y = (e.clientY - rect.top) / rect.height - 0.5;
+      logoWrap.style.transform = `translate(${x * 18}px, ${y * 18}px)`;
+    });
+    hero.addEventListener('mouseleave', () => {
+      logoWrap.style.transform = 'translate(0,0)';
+    });
+  }
+</script>
+
+</body>
+</html>
